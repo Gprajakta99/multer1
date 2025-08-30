@@ -2,28 +2,21 @@ const express = require("express");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
-const path = require("path");
 
 const app = express();
 app.use(express.json());
 
-// 🔹 Make sure uploads folder exists (important for Render)
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// 🔹 Cloudinary Configuration (⚠️ hardcoded - later replace with env)
+// 🔹 Cloudinary Configuration (hardcoded)
 cloudinary.config({
-  cloud_name: "dwmfqbbmp",                  // your cloud name
-  api_key: "117874648184923",               // your API key
+  cloud_name: "dwmfqbbmp",       // your cloud name
+  api_key: "117874648184923",    // your API key
   api_secret: "4iFNTp-qw4Zjz8bPNud7FXf_FJo" // your API secret
 });
 
-// 🔹 Multer setup
+// 🔹 Multer setup (temporary local storage before upload to Cloudinary)
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads"); // temporary save
+    cb(null, "uploads"); // save locally first
   },
   filename: function (req, file, cb) {
     cb(null, file.fieldname + "-" + Date.now() + ".jpg");
@@ -37,10 +30,10 @@ app.post("/upload", upload, async (req, res) => {
   try {
     // Upload file to Cloudinary
     const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: "my_uploads",
+      folder: "my_uploads", // optional: organize files in a folder
     });
 
-    // Delete local file after uploading to Cloudinary
+    // Remove file from local uploads folder after uploading to Cloudinary
     fs.unlinkSync(req.file.path);
 
     res.json({
@@ -53,8 +46,8 @@ app.post("/upload", upload, async (req, res) => {
   }
 });
 
-// 🔹 Start Server (Render requires process.env.PORT)
-const PORT = process.env.PORT || 3000;
+// 🔹 Start Server
+const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
