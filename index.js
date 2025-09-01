@@ -37,7 +37,7 @@ app.post("/upload", upload.single("image"), async (req, res) => {
       folder: "my_uploads",
     });
 
-    // Save to MongoDB
+    // Save  MongoDB
     const newImage = new Image({
       public_id: result.public_id,
       url: result.secure_url,
@@ -67,14 +67,14 @@ app.get("/images", async (req, res) => {
 });
 app.delete("/images/:id", async (req, res) => {
   try {
-    // 1. MongoDB से record निकालो
+    // 1. MongoDB record
     const image = await Image.findById(req.params.id);
     if (!image) return res.status(404).json({ message: "Image not found" });
 
-    // 2. Cloudinary से delete करो
+    // 2. Cloudinary delete
     await cloudinary.uploader.destroy(image.public_id);
 
-    // 3. MongoDB से delete करो
+    // 3. MongoDB delete
     await Image.findByIdAndDelete(req.params.id);
 
     res.json({ message: "Image deleted from Cloudinary & MongoDB" });
