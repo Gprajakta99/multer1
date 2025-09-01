@@ -1,60 +1,92 @@
 const express = require("express");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
-const fs = require("fs");
-const path = require("path");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv");
+const Image = require("./models/image"); 
 
+dotenv.config();
 const app = express();
 app.use(express.json());
 
-// 🔹 Make sure uploads folder exists (important for Render)
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+// MongoDB Atlas connection
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.error("MongoDB Error:", err));
 
-// 🔹 Cloudinary Configuration (⚠️ hardcoded - later replace with env)
+// Multer setup (file handling)
+const storage = multer.diskStorage({});
+const upload = multer({ storage });
+
+// Cloudinary Config
 cloudinary.config({
-  cloud_name: "dwmfqbbmp",                  // your cloud name
-  api_key: "117874648184923",               // your API key
-  api_secret: "4iFNTp-qw4Zjz8bPNud7FXf_FJo" // your API secret
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
 });
 
-// 🔹 Multer setup
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads"); // temporary save
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.fieldname + "-" + Date.now() + ".jpg");
-  },
-});
 
-const upload = multer({ storage: storage }).single("user_file");
-
-// 🔹 Upload API
-app.post("/upload", upload, async (req, res) => {
+// Upload Image
+app.post("/upload", upload.single("image"), async (req, res) => {
   try {
-    // Upload file to Cloudinary
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: "my_uploads",
     });
 
-    // Delete local file after uploading to Cloudinary
-    fs.unlinkSync(req.file.path);
+    // Save to MongoDB
+    const newImage = new Image({
+      public_id: result.public_id,
+      url: result.secure_url,
+    });
+
+    await newImage.save();
 
     res.json({
-      message: "File uploaded successfully!",
-      url: result.secure_url, // Cloudinary CDN URL
+      message: "File uploaded and saved to DB!",
+      data: newImage,
     });
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Upload failed" });
   }
 });
 
-// 🔹 Start Server (Render requires process.env.PORT)
+// Get All Images
+app.get("/images", async (req, res) => {
+  try {
+    const images = await Image.find();
+    res.json(images);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch images" });
+  }
+});
+app.delete("/images/:id", async (req, res) => {
+  try {
+    // 1. MongoDB से record निकालो
+    const image = await Image.findById(req.params.id);
+    if (!image) return res.status(404).json({ message: "Image not found" });
+
+    // 2. Cloudinary से delete करो
+    await cloudinary.uploader.destroy(image.public_id);
+
+    // 3. MongoDB से delete करो
+    await Image.findByIdAndDelete(req.params.id);
+
+    res.json({ message: "Image deleted from Cloudinary & MongoDB" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+// Server Start
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
